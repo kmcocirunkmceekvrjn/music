@@ -15,11 +15,12 @@ patch_for_railway.py
 تغییرات:
   1) API_ID / API_HASH / mersad / sudo / path85 از environment variables خوانده می‌شوند
   2) کلاینت ربات با bot_token و کلاینت هلپر با session_string لاگین می‌کنند (حذف input تعاملی)
-  3) مسیر database.sqlite قابل تنطیم می‌شود تا روی Volume بنشیند
-  4) تمام os.system('sudo fuser -k ...') حدف می‌شوند (در کانتینر sudo وجود ندارد)
+  3) مسیر database.sqlite قابل تنظیم می‌شود تا روی Volume بنشیند
+  4) تمام os.system('sudo fuser -k ...') حذف می‌شوند (در کانتینر sudo وجود ندارد)
   5) os.system('rm -rf downloads/*') با یک تابع ایمن پایتون جایگزین می‌شود
-  6) youtube-dl -> yt-dlp
-  7) تزریق کوتیشن در کوئری‌های SQL متنی (کاهش SQL Injection)
+  6) os.system('rm ./*.jpg') و ('rm ./*.mp4') ایمن می‌شوند تا mersad.jpg و mersad.mp4 حذف نشوند
+  7) youtube-dl -> yt-dlp
+  8) اسکپ کوتیشن در کوئری‌های SQL متنی (کاهش SQL Injection)
 """
 
 import re
@@ -34,7 +35,7 @@ import os as _os
 
 
 def _env_int(key, default=0):
-    """خواندن متغیر محیطی عددی با مقدار پیش‌فرض."""
+    """خواندن متغیر محیطی عددی با مقدار پیش\u200cفرض."""
     raw = _os.environ.get(key, "").strip()
     if not raw:
         return default
@@ -48,22 +49,22 @@ def _env_str(key, default="", required=False):
     """خواندن متغیر محیطی متنی."""
     val = _os.environ.get(key, default).strip()
     if required and not val:
-        raise SystemExit(f"[!] متغیر محیطی {key} تنطیم نشده است.")
+        raise SystemExit(f"[!] متغیر محیطی {key} تنظیم نشده است.")
     return val
 
 
 def sq(value):
-    """اسکپ کردن کوتیشن برای درج در کوئری‌های SQL متنی.
+    """اسکپ کردن کوتیشن برای درج در کوئری\u200cهای SQL متنی.
 
-    راه‌حل اصولی parameterized query است، این فقط کاهش ریسک است.
+    راه\u200cحل اصولی parameterized query است، این فقط کاهش ریسک است.
     """
     if value is None:
         return ""
-    return str(value).replace("\\", "\\\\").replace('"', '""').replace("'", "''")
+    return str(value).replace("\\\\", "\\\\\\\\").replace('"', '""').replace("'", "''")
 
 
 def _safe_clear_downloads():
-    """پاک‌سازی پوشه دانلودها بدون rm -rf."""
+    """پاک\u200cسازی پوشه دانلودها بدون rm -rf."""
     import shutil as _shutil
     base = _os.environ.get("DOWNLOAD_PATH", "./downloads/")
     if not _os.path.isdir(base):
@@ -75,6 +76,29 @@ def _safe_clear_downloads():
                 _shutil.rmtree(target, ignore_errors=True)
             else:
                 _os.remove(target)
+        except OSError:
+            pass
+
+
+def _safe_clear_media(ext):
+    """حذف فایل\u200cهای موقت با پسوند داده\u200cشده در پوشه جاری.
+
+    فایل\u200cهای دارایی ربات (mersad.jpg / mersad.mp4) هرگز حذف نمی\u200cشوند.
+    """
+    protected = {"mersad.jpg", "mersad.mp4"}
+    try:
+        entries = _os.listdir(".")
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.lower().endswith(ext):
+            continue
+        if entry in protected:
+            continue
+        if not _os.path.isfile(entry):
+            continue
+        try:
+            _os.remove(entry)
         except OSError:
             pass
 
@@ -95,7 +119,7 @@ def patch(source: str) -> tuple[str, list[str]]:
     # ---- 1) تزریق بلوک کمکی قبل از تعریف mersad ----
     anchor = re.search(r"^mersad\s*=", source, flags=re.M)
     if anchor is None:
-        raise SystemExit("[!] خط 'mersad = ...' پیدا نشد. فایل مورد انتزار نیست.")
+        raise SystemExit("[!] خط 'mersad = ...' پیدا نشد. فایل مورد انتظار نیست.")
     if "RAILWAY / DOCKER PATCH" in source:
         raise SystemExit("[!] این فایل قبلاً پچ شده است.")
     source = source[: anchor.start()] + HEADER_BLOCK + "\n" + source[anchor.start() :]
@@ -179,7 +203,7 @@ def patch(source: str) -> tuple[str, list[str]]:
         source,
     )
     if n:
-        log.append(f"مسیر دیتابیس قابل تنطیم شد ({n} مورد)")
+        log.append(f"مسیر دیتابیس قابل تنظیم شد ({n} مورد)")
 
     # ---- 7) حذف تمام fuser -k ----
     source, n = re.subn(
@@ -196,6 +220,14 @@ def patch(source: str) -> tuple[str, list[str]]:
         source,
     )
     log.append(f"{n} مورد rm -rf با تابع ایمن جایگزین شد")
+
+    # ---- 8b) rm ./*.jpg و rm ./*.mp4 — حفاظت از mersad.jpg / mersad.mp4 ----
+    source, n = re.subn(
+        r"os\.system\(\s*['\"]rm\s+\.?/?\*\.(jpg|jpeg|png|mp4)['\"]\s*\)",
+        lambda m: f'_safe_clear_media(".{m.group(1)}")',
+        source,
+    )
+    log.append(f"{n} مورد rm ./*.jpg|mp4 ایمن شد (حفاظت از mersad.jpg/mp4)")
 
     # ---- 9) youtube-dl -> yt-dlp ----
     source, n = re.subn(r"(['\"])youtube-dl\1", r"\1yt-dlp\1", source)
