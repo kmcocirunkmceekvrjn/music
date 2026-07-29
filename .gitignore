@@ -1,0 +1,13 @@
+.env
+*.session
+*.session-journal
+cli_session.txt
+__pycache__/
+*.py[cod]
+*.bak
+data/
+downloads/
+*.sqlite
+*.sqlite3
+mersad.jpg
+mersad.mp4

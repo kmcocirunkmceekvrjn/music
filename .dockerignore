@@ -1,0 +1,18 @@
+# فایل‌های حساس — هرگز داخل ایمیج نروند
+.env
+*.session
+*.session-journal
+cli_session.txt
+
+# کش و موقتی
+__pycache__/
+*.py[cod]
+*.bak
+.git/
+.gitignore
+
+# دیتای رانتایم (روی Volume می‌نشیند)
+data/
+downloads/
+*.sqlite
+*.sqlite3

@@ -1,0 +1,42 @@
+# ==========================================================
+#  Music Player Bot  --  Kali Linux base
+#  هشدار: ایمیج Kali حدود 1.5-2GB است و مخزن rolling
+#  ممکن است در بیلدهای مختلف بشکند.
+#  برای این پروژه هیچ مزیتی ندارد — Dockerfile اصلی را ترجیح دهید.
+# ==========================================================
+FROM kalilinux/kali-rolling
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Tehran
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        ffmpeg \
+        psmisc \
+        curl \
+        ca-certificates \
+        tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Kali از PEP 668 پیروی می‌کند، پس venv می‌سازیم
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN mkdir -p /app/data /app/downloads
+VOLUME ["/app/data"]
+
+RUN ffmpeg -version > /dev/null && echo "ffmpeg OK"
+
+CMD ["python3", "main.py"]
